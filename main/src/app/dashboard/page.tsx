@@ -30,8 +30,8 @@ export default async function Dashboard() {
         <a href="/generate" className="rounded bg-black text-white px-3 py-2">
           Generate
         </a>
-        <form action="/logout" method="post" className="inline">
-          <button className="rounded border px-3 py-2">Log out</button>
+        <form action="/logout" method="POST">
+          <button type="submit" className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Log out</button>
         </form>
       </div>
     </main>
