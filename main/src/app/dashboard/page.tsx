@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import GenerateClient from "@/components/resume/GenerateClient";
 
 export default async function Dashboard() {
   const supabase = createClient();
@@ -26,12 +27,17 @@ export default async function Dashboard() {
         <div className="text-3xl font-bold">{profile?.credits ?? 0}</div>
       </div>
 
-      <div className="space-x-2">
-        <a href="/generate" className="rounded bg-black text-white px-3 py-2">
-          Generate
-        </a>
+      {/* New generator UI */}
+      <GenerateClient />
+
+      <div>
         <form action="/logout" method="POST">
-          <button type="submit" className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Log out</button>
+          <button
+            type="submit"
+            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+          >
+            Log out
+          </button>
         </form>
       </div>
     </main>
