@@ -1,50 +1,41 @@
-import { NextResponse, type NextRequest } from 'next/server';  // Keep/update this
-import { updateSession } from '@/utils/supabase/middleware';  // Keep this
-import { createServerClient } from '@supabase/ssr';
+// src/middleware.ts
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { createMiddlewareClient } from "@/utils/supabase/middleware";
 
-export async function middleware(request: NextRequest) {
-  // First, run the existing session update (this refreshes cookies/session).
-  let response = await updateSession(request);
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next();
 
-  // Now, create a Supabase client using the updated response, passing URL and key directly.
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          response.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: any) {
-          response.cookies.set({ name, value: '', ...options });
-        },
-      },
-    }
-  );
+  const supabase = createMiddlewareClient({ req, res });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  // Get the session (this tells us if the user is logged in).
-  const { data: { session } } = await supabase.auth.getSession();
+  const path = req.nextUrl.pathname;
 
-  // Protect /dashboard: If no session, redirect to /login.
-  if (request.nextUrl.pathname.startsWith('/dashboard')) {
-    if (!session) {
-      return NextResponse.redirect(new URL('/login', request.url));  // Redirect if not logged in.
-    }
+  const isPublic =
+    path === "/" ||
+    path === "/login" ||
+    path.startsWith("/api/") ||
+    path.startsWith("/_next") ||
+    path === "/favicon.ico";
+
+  if (!user && !isPublic) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("redirectedFrom", path);
+    return NextResponse.redirect(url);
   }
 
-  // Bonus: If already logged in, redirect away from /login to /dashboard.
-  if (request.nextUrl.pathname === '/login' && session) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+  if (user && path === "/login") {
+    const url = req.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
   }
 
-  return response;  // If all good, proceed.
+  return res;
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
