@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 function getErrorMessage(e: unknown) {
   if (e instanceof Error) return e.message;
@@ -13,6 +14,7 @@ function getErrorMessage(e: unknown) {
 }
 
 export default function GenerateClient() {
+  const router = useRouter();
   const [jobTitle, setJobTitle] = useState("");
   const [experience, setExperience] = useState<number | "">("");
   const [skills, setSkills] = useState("");
@@ -38,6 +40,7 @@ export default function GenerateClient() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to generate");
       setResult(data.text);
+      router.refresh();
     } catch (e: unknown) {
       setError(getErrorMessage(e));
     } finally {
