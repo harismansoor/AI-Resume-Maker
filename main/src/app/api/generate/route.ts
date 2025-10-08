@@ -1,5 +1,4 @@
 import type { NextRequest } from "next/server";
-// NOTE: your util exports `createClient`, not `createServerClient`
 import { createClient } from "@/utils/supabase/server";
 import { openai } from "@/utils/openai";
 
@@ -7,7 +6,8 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = createClient();
     const { data: { user }, error: userErr } = await supabase.auth.getUser();
-    if (userErr || !user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+    if (userErr || !user) 
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
     const jobTitle = (body?.jobTitle ?? "").trim();
@@ -17,10 +17,15 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Missing fields" }, { status: 400 });
     }
 
-    // 🚦 ATOMIC: decrement credit first; if null, no credits left
-    const { data: dec, error: decErr } = await supabase.rpc("decrement_credit");
-    if (decErr) return Response.json({ error: decErr.message }, { status: 500 });
-    if (dec === null) return Response.json({ error: "No credits left" }, { status: 400 });
+    // 🧠 Skip credit deduction if admin
+    if (user.email === "harismansoor0.0@gmail.com") {
+      console.log("Admin detected — skipping credit deduction.");
+    } else {
+      // 🚦 ATOMIC: decrement credit first; if null, no credits left
+      const { data: dec, error: decErr } = await supabase.rpc("decrement_credit");
+      if (decErr) return Response.json({ error: decErr.message }, { status: 500 });
+      if (dec === null) return Response.json({ error: "No credits left" }, { status: 400 });
+    }
 
     // Call OpenAI
     const prompt = `You are an expert resume writer. Generate a concise, high-impact resume summary (80–120 words) ...
@@ -59,4 +64,3 @@ Constraints:
     return Response.json({ error: message }, { status: 500 });
   }
 }
-
