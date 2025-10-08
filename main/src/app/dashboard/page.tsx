@@ -27,6 +27,13 @@ export default async function Dashboard() {
         <div className="text-3xl font-bold">{profile?.credits ?? 0}</div>
       </div>
 
+      <a
+        href="/resume"
+        className="inline-block rounded bg-white/10 px-3 py-2 hover:bg-white/20"
+      >
+        Open Resume Builder
+      </a>
+
       {/* New generator UI */}
       <GenerateClient />
 
