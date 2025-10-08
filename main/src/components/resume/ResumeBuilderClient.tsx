@@ -187,6 +187,36 @@ export default function ResumeBuilderClient() {
             dangerouslySetInnerHTML={{ __html: html }}
           />
         )}
+        {html && (
+          <div className="mt-3">
+            <button
+              className="rounded border px-3 py-2 hover:bg-white/10"
+              onClick={async () => {
+                const res = await fetch("/api/export-docx", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ html, filename: "resume" }),
+                });
+                if (!res.ok) {
+                  const d = await res.json().catch(() => ({}));
+                  alert(d?.error || "Failed to export");
+                  return;
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "resume.docx";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Download as Word (.docx)
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
