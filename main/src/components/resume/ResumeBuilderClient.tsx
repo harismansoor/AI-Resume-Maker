@@ -24,6 +24,43 @@ export default function ResumeBuilderClient() {
   // ---------- UI state ----------
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [lastSavedId, setLastSavedId] = useState<string | null>(null);
+
+  // Save to Supabase via /api/resumes
+  async function onSaveResume() {
+    if (!data) {
+      alert("Nothing to save yet. Generate or import a resume first.");
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const res = await fetch("/api/resumes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `${
+            data.name || name || "Resume"
+          } — ${new Date().toLocaleDateString()}`,
+          template, // "minimal" | "elegant" | etc
+          sections, // your current toggled sections array
+          data, // the structured ResumeData we’re previewing
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to save");
+      setLastSavedId(json.id as string);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const onImported = (d: ImportedData) => {
     // 1) Update left-side form fields
@@ -150,6 +187,30 @@ export default function ResumeBuilderClient() {
     a.remove();
     URL.revokeObjectURL(url);
   }
+
+  function move<T>(arr: T[], from: number, to: number) {
+    const copy = arr.slice();
+    const item = copy.splice(from, 1)[0];
+    copy.splice(to, 0, item);
+    return copy;
+  }
+
+  function moveSectionUp(s: ResumeSectionId) {
+    setSections((prev) => {
+      const i = prev.indexOf(s);
+      if (i <= 0) return prev;
+      return move(prev, i, i - 1);
+    });
+  }
+
+  function moveSectionDown(s: ResumeSectionId) {
+    setSections((prev) => {
+      const i = prev.indexOf(s);
+      if (i === -1 || i >= prev.length - 1) return prev;
+      return move(prev, i, i + 1);
+    });
+  }
+
   function toSkillString(skills?: string[]) {
     return (skills ?? []).join(", ");
   }
@@ -296,32 +357,65 @@ export default function ResumeBuilderClient() {
         <TemplatePicker value={template} onChange={setTemplate} />
 
         <div className="space-y-2">
-          <div className="text-sm mt-3">Sections</div>
-          {(
-            [
-              "summary",
-              "skills",
-              "experience",
-              "education",
-              "projects",
-              "achievements",
-              "certifications",
-              "languages",
-            ] as ResumeSectionId[]
-          ).map((s) => (
-            <label
-              key={s}
-              className="mr-3 inline-flex items-center gap-2 text-sm"
-            >
-              <input
-                type="checkbox"
-                checked={sections.includes(s)}
-                onChange={() => toggleSection(s)}
-              />
-              {s}
-            </label>
-          ))}
+          <div className="text-sm mt-3">Sections (toggle & reorder)</div>
+          <div className="flex flex-col gap-2">
+            {(
+              [
+                "summary",
+                "skills",
+                "experience",
+                "education",
+                "projects",
+                "achievements",
+                "certifications",
+                "languages",
+              ] as ResumeSectionId[]
+            ).map((s) => {
+              const enabled = sections.includes(s);
+              const idx = sections.indexOf(s);
+              return (
+                <div
+                  key={s}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={enabled}
+                      onChange={() => toggleSection(s)}
+                    />
+                    <span className={!enabled ? "opacity-50" : ""}>{s}</span>
+                  </label>
+
+                  {/* Only show reorder controls if the section is enabled */}
+                  {enabled && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="rounded border px-2 py-1 hover:bg-white/10 disabled:opacity-40"
+                        onClick={() => moveSectionUp(s)}
+                        disabled={idx <= 0}
+                        aria-label={`Move ${s} up`}
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded border px-2 py-1 hover:bg-white/10 disabled:opacity-40"
+                        onClick={() => moveSectionDown(s)}
+                        disabled={idx === sections.length - 1}
+                        aria-label={`Move ${s} down`}
+                      >
+                        ▼
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
+
         <ImportResumeBox onImported={onImported} />
         <button
           type="submit"
@@ -363,6 +457,35 @@ export default function ResumeBuilderClient() {
           </>
         )}
       </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          className="rounded border px-3 py-2 hover:bg-white/10"
+          onClick={onDownloadDocx}
+        >
+          Download as Word (.docx)
+        </button>
+
+        <button
+          className="rounded border px-3 py-2 hover:bg-white/10 disabled:opacity-50"
+          onClick={onSaveResume}
+          disabled={saving}
+        >
+          {saving ? "Saving…" : "Save to Library"}
+        </button>
+      </div>
+
+      {saveError && (
+        <p className="mt-2 rounded bg-red-500/10 p-2 text-sm text-red-300">
+          {saveError}
+        </p>
+      )}
+
+      {lastSavedId && (
+        <p className="mt-2 text-xs opacity-70">
+          Saved! ID: <span className="font-mono">{lastSavedId}</span>
+        </p>
+      )}
     </div>
   );
 }
