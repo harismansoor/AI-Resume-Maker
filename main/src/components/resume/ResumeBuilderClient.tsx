@@ -5,6 +5,8 @@ import type { ResumeData, ResumeSectionId } from "@/types/resume";
 import TemplateMinimal from "@/components/templates/TemplateMinimal";
 import TemplateElegant from "@/components/templates/TemplateElegant";
 import { TemplatePicker } from "@/components/resume/TemplatePicker";
+import ImportResumeBox from "@/components/resume/ImportResumeBox";
+import type { ImportedData } from "@/types/import";
 
 export default function ResumeBuilderClient() {
   // ---------- Form fields ----------
@@ -22,6 +24,48 @@ export default function ResumeBuilderClient() {
   // ---------- UI state ----------
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const onImported = (d: ImportedData) => {
+    // 1) Update left-side form fields
+    setName(d.name ?? name);
+    setJobTitle(d.role ?? jobTitle);
+    setEmail(d.contact?.email ?? email);
+    setPhone(d.contact?.phone ?? phone);
+    setLocation(d.contact?.location ?? location);
+    setSkills(toSkillString(d.skills));
+    setEducation(toEducationString(d.education));
+    setAchievements(toAchievementsString(d.achievements));
+    setProjects(toProjectsString(d.projects));
+
+    // 2) Update the structured preview (if you’ve already generated once)
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            name: d.name ?? prev.name,
+            role: d.role ?? prev.role,
+            contact: {
+              email: d.contact?.email ?? prev.contact.email,
+              phone: d.contact?.phone ?? prev.contact.phone,
+              location: d.contact?.location ?? prev.contact.location,
+              links: d.contact?.links ?? prev.contact.links,
+            },
+            summary: d.summary ?? prev.summary,
+            skills: d.skills?.length ? d.skills : prev.skills,
+            experience: d.experience?.length ? d.experience : prev.experience,
+            education: d.education?.length ? d.education : prev.education,
+            projects: d.projects?.length ? d.projects : prev.projects,
+            achievements: d.achievements?.length
+              ? d.achievements
+              : prev.achievements,
+            certifications: d.certifications?.length
+              ? d.certifications
+              : prev.certifications,
+            languages: d.languages?.length ? d.languages : prev.languages,
+          }
+        : prev
+    );
+  };
 
   // ---------- Structured resume + template/sections ----------
   const [data, setData] = useState<ResumeData | null>(null);
@@ -105,6 +149,28 @@ export default function ResumeBuilderClient() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+  }
+  function toSkillString(skills?: string[]) {
+    return (skills ?? []).join(", ");
+  }
+  function toEducationString(ed?: ImportedData["education"]) {
+    if (!ed?.length) return "";
+    return ed
+      .map((e) => [e?.degree, e?.school, e?.year].filter(Boolean).join(" — "))
+      .join("\n");
+  }
+  function toAchievementsString(a?: string[]) {
+    return (a ?? []).join("\n");
+  }
+  function toProjectsString(pr?: ImportedData["projects"]) {
+    if (!pr?.length) return "";
+    return pr
+      .map((p) => {
+        const head = [p?.title, p?.company].filter(Boolean).join(" @ ");
+        const first = p?.bullets?.[0] ? ` — ${p?.bullets[0]}` : "";
+        return head + first;
+      })
+      .join("\n");
   }
 
   return (
@@ -256,7 +322,7 @@ export default function ResumeBuilderClient() {
             </label>
           ))}
         </div>
-
+        <ImportResumeBox onImported={onImported} />
         <button
           type="submit"
           disabled={loading}
