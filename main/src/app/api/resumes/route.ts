@@ -1,43 +1,33 @@
-import { NextRequest } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+// src/app/api/resumes/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
 
-/**
- * POST /api/resumes
- * body: { title?: string; template: string; sections: string[]; data: any }
- */
-export async function POST(req: NextRequest) {
-  const supabase = createClient();
-  const { data: u, error: userErr } = await supabase.auth.getUser();
-  if (userErr || !u?.user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const user = u.user;
+export async function GET() {
+  const supabase = createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await req.json();
-  const title = (body?.title ?? "Untitled Resume").toString();
-  const template = (body?.template ?? "minimal").toString();
-  const sections = Array.isArray(body?.sections) ? body.sections : [];
-  const data = body?.data;
+  const { data, error } = await supabase
+    .from('resumes')
+    .select('id, title, template, created_at, updated_at')
+    .eq('user_id', user.id)
+    .order('updated_at', { ascending: false })
+    .limit(100)
 
-  if (!data) {
-    return Response.json({ error: "Missing data" }, { status: 400 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  return NextResponse.json({ data }, { status: 200, headers: { 'Cache-Control': 'no-store' } })
+}
 
-  const { data: inserted, error } = await supabase
-    .from("resumes")
-    .insert({
-      user_id: user.id,
-      title,
-      template,
-      sections,
-      data,
-    })
-    .select("id")
-    .single();
+export async function DELETE(req: NextRequest) {
+  const url = new URL(req.url)
+  const id = url.searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-  if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
-  }
+  const supabase = createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  return Response.json({ id: inserted.id }, { status: 200 });
+  const { error } = await supabase.from('resumes').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  return new NextResponse(null, { status: 204 })
 }
