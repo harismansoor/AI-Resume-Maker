@@ -1,39 +1,52 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import ConfirmDeleteModal from "@/components/ConfirmDeleteModal";
 
-type ResumeItem = {
+type ResumeListItem = {
   id: string;
   title: string;
   template: string;
+  version?: number;
   created_at: string;
   updated_at: string;
 };
 
+type ApiListResponse = {
+  data?: ResumeListItem[];
+  error?: string;
+};
+
 export default function ResumesClient() {
-  const [items, setItems] = useState<ResumeItem[]>([]);
+  const [items, setItems] = useState<ResumeListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/resumes", { cache: "no-store" });
-    const json = await res.json();
-    setItems(json?.data ?? []);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/resumes", { cache: "no-store" });
+      const json = (await res.json()) as ApiListResponse;
+      setItems(Array.isArray(json?.data) ? json.data : []);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   async function onDelete(id: string) {
     setConfirmId(null);
     const prev = items;
-    setItems((cur) => cur.filter((x) => x.id !== id));
+    // optimistic update
+    setItems((curr) => curr.filter((x) => x.id !== id));
+
     const res = await fetch(`/api/resumes?id=${id}`, { method: "DELETE" });
-    if (!res.ok && res.status !== 204) {
+    if (!res.ok) {
+      // rollback on failure
       setItems(prev);
       alert("Failed to delete resume");
     }
@@ -72,8 +85,18 @@ export default function ResumesClient() {
               className="flex items-center justify-between rounded-xl bg-neutral-900 p-4"
             >
               <div className="min-w-0">
-                <div className="truncate font-medium">
-                  {it.title || "Untitled resume"}
+                <div className="flex items-center gap-2 truncate font-medium">
+                  <span className="truncate">
+                    {it.title || "Untitled resume"}
+                  </span>
+                  {typeof it.version === "number" && (
+                    <span className="shrink-0 rounded bg-neutral-800 px-2 py-0.5 text-[10px] tracking-wide">
+                      v{it.version}
+                    </span>
+                  )}
+                  <span className="shrink-0 rounded border border-neutral-700 px-2 py-0.5 text-[10px] text-neutral-300">
+                    {it.template}
+                  </span>
                 </div>
                 <div className="mt-1 text-xs text-neutral-400">
                   {new Date(it.updated_at ?? it.created_at).toLocaleString()}

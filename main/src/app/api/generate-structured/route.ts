@@ -1,104 +1,122 @@
-import type { NextRequest } from "next/server";
-import { createClient } from "@/utils/supabase/server";
-import { openai } from "@/utils/openai";
-import type { ResumeData, ResumeSectionId } from "@/types/resume";
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
+import OpenAI from 'openai'
+
+type Tone = 'Professional' | 'Academic' | 'Creative' | 'Friendly'
+type Style = 'Concise' | 'Balanced' | 'Detailed'
+
+type GenerateBody = {
+  prompt: string
+  tone?: Tone
+  style?: Style
+}
+
+const DEFAULT_TONE: Tone = 'Professional'
+const DEFAULT_STYLE: Style = 'Balanced'
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
-
-    const body = await req.json();
+    const supabase = createClient()
     const {
-      name, email, phone, location, jobTitle, experienceYears,
-      skills, education, achievements, projects,
-      // optional: section controls
-      includeSections,
-    } = body as {
-      name: string; email?: string; phone?: string; location?: string;
-      jobTitle: string; experienceYears: number;
-      skills: string; education?: string; achievements?: string; projects?: string;
-      includeSections?: ResumeSectionId[];
-    };
-
-    // admin free; others decrement
-    if (user.email !== "harismansoor0.0@gmail.com") {
-      const { data: dec, error: decErr } = await supabase.rpc("decrement_credit");
-      if (decErr) return Response.json({ error: decErr.message }, { status: 500 });
-      if (dec === null) return Response.json({ error: "No credits left" }, { status: 400 });
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const prompt = `
-Return ONLY valid JSON (no backticks).
-You are a professional resume writer. Produce a JSON object matching this TypeScript type:
-${/* keep it short for token cost */ ""}
-{
-  "name": string,
-  "role": string,
-  "contact": { "email"?: string, "phone"?: string, "location"?: string, "links"?: string[] },
-  "summary"?: string,
-  "skills"?: string[],
-  "experience"?: Array<{ "title"?: string, "company"?: string, "location"?: string, "startDate"?: string, "endDate"?: string, "bullets"?: string[] }>,
-  "education"?: Array<{ "degree"?: string, "school"?: string, "year"?: string, "details"?: string[] }>,
-  "projects"?: Array<{ "title"?: string, "company"?: string, "location"?: string, "startDate"?: string, "endDate"?: string, "bullets"?: string[] }>,
-  "achievements"?: string[],
-  "certifications"?: string[],
-  "languages"?: string[]
-}
+    const body = (await req.json()) as GenerateBody
+    const { prompt, tone = DEFAULT_TONE, style = DEFAULT_STYLE } = body
+    if (!prompt || typeof prompt !== 'string') {
+      return NextResponse.json({ error: 'Missing prompt' }, { status: 400 })
+    }
 
-Use the following user info:
-- Name: ${name}
-- Role: ${jobTitle}
-- Total Experience: ${experienceYears} years
-- Contact: ${email ?? ""} | ${phone ?? ""} | ${location ?? ""}
-- Skills (raw): ${skills}
-- Education (raw): ${education ?? ""}
-- Achievements (raw): ${achievements ?? ""}
-- Projects (raw): ${projects ?? ""}
-- Include only these sections if provided: ${includeSections?.join(", ") ?? "all common sections"}
+    // decrement credit unless admin bypass
+    const isBypass = user.email === 'harismansoor0.0@gmail.com'
+    if (!isBypass) {
+      const { data: dec, error: decErr } = await supabase.rpc('decrement_credit')
+      if (decErr || dec === null) {
+        return NextResponse.json({ error: 'No credits left' }, { status: 402 })
+      }
+    }
 
-Guidelines:
-- Summary: 3–5 lines, impact & metrics.
-- Skills: 8–12 strongest keywords.
-- Experience: 2–3 roles, each 3–5 bullets, quantified.
-- Education: concise.
-- Projects/Achievements: include if signal is good.
-- Dates short like "2022—Present".
-`;
+    // Build the system instructions using tone/style
+    const toneHint =
+      tone === 'Professional'
+        ? 'Use straightforward, business-appropriate language.'
+        : tone === 'Academic'
+        ? 'Use formal, scholarly language where appropriate.'
+        : tone === 'Creative'
+        ? 'Use vivid but still resume-appropriate language.'
+        : 'Use warm, approachable language while staying professional.'
 
+    const styleHint =
+      style === 'Concise'
+        ? 'Be concise. Prefer short bullet points and tight phrasing.'
+        : style === 'Detailed'
+        ? 'Be descriptive. Expand bullets with concrete results and context.'
+        : 'Balance brevity and detail. Keep bullets informative but focused.'
+
+    const system = [
+      'You generate strictly VALID JSON for a resume object named ResumeData.',
+      'Do not include Markdown, code fences, or commentary—JSON only.',
+      'Make content ATS-friendly (verbs, impact, tech keywords).',
+      `Tone: ${tone}. ${toneHint}`,
+      `Style: ${style}. ${styleHint}`,
+      'Prefer measurable outcomes (%, $, time saved) when inferring impact.',
+    ].join(' ')
+
+    const userMsg = [
+      'User prompt:',
+      prompt,
+      '',
+      'Return JSON with keys where available:',
+      `{
+        "name": string,
+        "contact": { "email"?: string, "phone"?: string, "location"?: string, "website"?: string, "linkedin"?: string, "github"?: string },
+        "summary"?: string,
+        "skills"?: string[],
+        "experience"?: [{ "company": string, "role"?: string, "start"?: string, "end"?: string, "bullets"?: string[] }],
+        "projects"?: [{ "name": string, "link"?: string, "bullets"?: string[] }],
+        "education"?: [{ "school": string, "degree"?: string, "start"?: string, "end"?: string, "details"?: string }]
+      }`,
+    ].join('\n')
+
+    const resp = await openai.responses.create({
+      model: 'gpt-4.1-mini',
+      input: [
+        { role: 'system', content: system },
+        { role: 'user', content: userMsg },
+      ],
+    })
+
+    const text = typeof resp.output_text === 'string' ? resp.output_text : ''
+    // Safe JSON extraction
+    const start = text.indexOf('{')
+    const end = text.lastIndexOf('}')
+    if (start === -1 || end === -1 || end <= start) {
+      if (!isBypass) await supabase.rpc('refund_credit')
+      return NextResponse.json({ error: 'Invalid model output' }, { status: 500 })
+    }
+    const raw = text.slice(start, end + 1)
+    let resume
     try {
-      const completion = await openai.responses.create({
-        model: "gpt-4.1-mini",
-        input: prompt,
-        temperature: 0.4,
-      });
-
-      const raw = (completion.output_text ?? "").trim();
-
-      // Parse JSON safely
-      let data: ResumeData | null = null;
-      try {
-        data = JSON.parse(raw) as ResumeData;
-      } catch {
-        // refund for non-admin on parse failure
-        if (user.email !== "harismansoor0.0@gmail.com") await supabase.rpc("refund_credit");
-        return Response.json({ error: "Bad JSON from model" }, { status: 502 });
-      }
-
-      if (!data?.name || !data?.role) {
-        if (user.email !== "harismansoor0.0@gmail.com") await supabase.rpc("refund_credit");
-        return Response.json({ error: "Incomplete data" }, { status: 502 });
-      }
-
-      return Response.json({ data });
-    } catch (e) {
-      if (user.email !== "harismansoor0.0@gmail.com") await supabase.rpc("refund_credit");
-      const msg = e instanceof Error ? e.message : "OpenAI error";
-      return Response.json({ error: msg }, { status: 502 });
+      resume = JSON.parse(raw)
+    } catch {
+      if (!isBypass) await supabase.rpc('refund_credit')
+      return NextResponse.json({ error: 'Could not parse JSON' }, { status: 500 })
     }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Server error";
-    return Response.json({ error: msg }, { status: 500 });
+
+    return NextResponse.json({ resume }, { status: 200 })
+  } catch (e: unknown) {
+    // best effort refund
+    try {
+      const supabase = createClient()
+      await supabase.rpc('refund_credit')
+    } catch {}
+    const message = e instanceof Error ? e.message : 'Unexpected error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
