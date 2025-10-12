@@ -15,7 +15,7 @@ import type { ImportedData } from "@/types/import";
 const TEMPLATE_REGISTRY: Record<string, ComponentType<{ data: ResumeData }>> = {
   Minimal: TemplateMinimal,
   Elegant: TemplateElegant,
-  Corporate: TemplateCorporate, // ← added
+  Corporate: TemplateCorporate,
 };
 
 /** Sections stored with the resume */
@@ -75,19 +75,46 @@ function loadDraft(): DraftShape | null {
   } catch {}
   return null;
 }
-
 function saveDraft(draft: DraftShape) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
   } catch {}
 }
-
 function clearDraft() {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(DRAFT_KEY);
   } catch {}
+}
+
+/** Apply sections toggles to the data before rendering */
+function applySections(data: ResumeData, sections: SectionsJSON): ResumeData {
+  // shallow clone to avoid mutating state
+  const out: ResumeData = { ...(data as object) } as ResumeData;
+
+  // Summary
+  if (!sections.summary) {
+    (out as unknown as { summary?: unknown }).summary = undefined;
+  }
+  // Skills
+  if (!sections.skills) {
+    (out as unknown as { skills?: unknown }).skills = [];
+  }
+  // Experience
+  if (!sections.experience) {
+    (out as unknown as { experience?: unknown }).experience = [];
+  }
+  // Projects
+  if (!sections.projects) {
+    (out as unknown as { projects?: unknown }).projects = [];
+  }
+  // Education
+  if (!sections.education) {
+    (out as unknown as { education?: unknown }).education = [];
+  }
+
+  return out;
 }
 
 export default function ResumeBuilderClient() {
@@ -337,6 +364,12 @@ export default function ResumeBuilderClient() {
   const TemplateComponent =
     TEMPLATE_REGISTRY[template] ?? TEMPLATE_REGISTRY.Minimal;
 
+  // Build effective data with sections applied (live)
+  const effectiveData = useMemo(
+    () => applySections(data, sections),
+    [data, sections]
+  );
+
   return (
     <div className="mx-auto max-w-6xl p-6">
       <div className="mb-6 flex flex-wrap items-end gap-3">
@@ -506,7 +539,7 @@ export default function ResumeBuilderClient() {
             id="resume-preview"
             className="rounded-xl border border-neutral-800 bg-white p-6 text-black"
           >
-            <TemplateComponent data={data} />
+            <TemplateComponent data={effectiveData} />
           </div>
         </div>
       </div>

@@ -57,17 +57,20 @@ export async function POST(req: NextRequest) {
 
     const { data: inserted, error } = await supabase
       .from('resumes')
-      .insert({
-        user_id: user.id,
-        title,
-        template,
-        sections,
-        data,
-        parent_id: parentId,
-        version,
-      })
+      .insert([
+        {
+          user_id: user.id,
+          title,
+          template,
+          sections,
+          data,
+          parent_id: parentId,
+          version,
+        },
+      ])
       .select('id, version')
       .single()
+
 
     if (error)
       return NextResponse.json({ error: error.message }, { status: 400 })
