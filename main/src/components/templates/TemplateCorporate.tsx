@@ -76,17 +76,12 @@ function asEducationList(v: unknown): EducationItem[] {
 
 /* ---------- Component ---------- */
 export default function TemplateCorporate({ data }: { data: ResumeData }) {
-  // name
   const name =
     asString((data as unknown as { name?: unknown }).name) ?? "Your Name";
-
-  // optional fields that may or may not exist in your ResumeData schema
   const summary = asString((data as unknown as { summary?: unknown }).summary);
 
-  // contact as a free-form record (email, phone, location, website, linkedin, github…)
   const contactRec =
-    asRecord((data as unknown as { contact?: unknown }).contact) ??
-    ({} as Record<string, unknown>);
+    asRecord((data as unknown as { contact?: unknown }).contact) ?? {};
   const email = asString(contactRec.email);
   const phone = asString(contactRec.phone);
   const location = asString(contactRec.location);
@@ -94,7 +89,6 @@ export default function TemplateCorporate({ data }: { data: ResumeData }) {
   const linkedin = asString(contactRec.linkedin);
   const github = asString(contactRec.github);
 
-  // collections
   const skills = asStringArray(
     (data as unknown as { skills?: unknown }).skills
   );
@@ -112,7 +106,6 @@ export default function TemplateCorporate({ data }: { data: ResumeData }) {
     <div className="px-8 py-10 text-sm leading-relaxed">
       <header className="mb-6 border-b border-neutral-300 pb-4">
         <h1 className="text-3xl font-semibold">{name}</h1>
-        {/* If you later add a `title` field to ResumeData, render it here */}
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
           {email && <span>{email}</span>}
           {phone && <span>{phone}</span>}

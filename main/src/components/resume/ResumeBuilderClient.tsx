@@ -7,6 +7,7 @@ import { TemplatePicker } from "@/components/resume/TemplatePicker";
 import ImportResumeBox from "@/components/resume/ImportResumeBox";
 import TemplateMinimal from "@/components/templates/TemplateMinimal";
 import TemplateElegant from "@/components/templates/TemplateElegant";
+import TemplateCorporate from "@/components/templates/TemplateCorporate";
 import type { ResumeData } from "@/types/resume";
 import type { ImportedData } from "@/types/import";
 
@@ -14,6 +15,7 @@ import type { ImportedData } from "@/types/import";
 const TEMPLATE_REGISTRY: Record<string, ComponentType<{ data: ResumeData }>> = {
   Minimal: TemplateMinimal,
   Elegant: TemplateElegant,
+  Corporate: TemplateCorporate, // ← added
 };
 
 /** Sections stored with the resume */
@@ -200,7 +202,7 @@ export default function ResumeBuilderClient() {
       const res = await fetch("/api/generate-structured", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, tone, style }), // include tone & style
+        body: JSON.stringify({ prompt, tone, style }),
       });
       const json = (await res.json()) as GenerateStructuredResponse;
       if (!res.ok || json.error)
@@ -259,7 +261,7 @@ export default function ResumeBuilderClient() {
       if (!res.ok || json.error)
         throw new Error(json.error || "Failed to save");
       if (json.id) {
-        clearDraft(); // success: clear local draft
+        clearDraft();
         router.push(`/resume?id=${json.id}`);
       }
     } catch (e) {
@@ -310,7 +312,7 @@ export default function ResumeBuilderClient() {
       if (!res.ok || json.error)
         throw new Error(json.error || "Failed to save copy");
       if (json.id) {
-        clearDraft(); // success: clear local draft (we'll navigate to the copy)
+        clearDraft();
         router.push(`/resume?id=${json.id}`);
       }
     } catch (e) {
@@ -323,7 +325,6 @@ export default function ResumeBuilderClient() {
 
   /** Import callback — matches ImportResumeBox props */
   function handleImported(imported: ImportedData) {
-    // Common shape: { data: ResumeData, title?: string }
     const maybe: unknown = imported as unknown;
     if (maybe && typeof maybe === "object") {
       const obj = maybe as { data?: unknown; title?: unknown };
